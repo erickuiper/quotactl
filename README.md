@@ -58,14 +58,14 @@ pip install -e .
 
 ### Linux binary and Python package (GitHub Releases)
 
-Each [GitHub Release](https://github.com/erickuiper/quotactl/releases) includes a Linux amd64 binary plus a Python wheel (`.whl`) and source distribution (`.tar.gz`). To use the binary, download `quotactl-<version>-linux-amd64`, rename to `quotactl`, and run:
+Each [GitHub Release](https://github.com/erickuiper/quotactl/releases) includes a Linux amd64 binary (built on Ubuntu 20.04 for glibc compatibility; runs on Ubuntu 20.04, 22.04, and other glibc 2.31+ systems) plus a Python wheel (`.whl`) and source distribution (`.tar.gz`). To use the binary, download `quotactl-<version>-linux-amd64`, rename to `quotactl`, and run:
 
 ```bash
 chmod +x quotactl
 ./quotactl --help
 ```
 
-To install from the release wheel: download the `.whl` from the release assets, then `pip install quotactl-<version>-py3-none-any.whl`.
+To install from the release wheel: download the `.whl` from the release assets, then `pip install quotactl-<version>-py3-none-any.whl`. Use the wheel or install from source if your system has glibc older than 2.31 (binary supports Ubuntu 20.04, 22.04, and similar).
 
 To build the binary yourself (requires PyInstaller):
 
