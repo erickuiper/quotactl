@@ -44,6 +44,22 @@ pip install --no-index --find-links wheels/ -r requirements.txt
 pip install -e .
 ```
 
+### Linux binary (single executable)
+
+Pre-built Linux amd64 binaries are published on [GitHub Releases](https://github.com/erickuiper/quotactl/releases). Download `quotactl-<version>-linux-amd64`, rename to `quotactl`, and run:
+
+```bash
+chmod +x quotactl
+./quotactl --help
+```
+
+To build the binary yourself (requires PyInstaller):
+
+```bash
+./scripts/build-release.sh
+# Output: dist/quotactl
+```
+
 ## Configuration
 
 Create a YAML configuration file for each Rancher instance:
