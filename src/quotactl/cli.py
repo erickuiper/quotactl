@@ -1,12 +1,17 @@
 """Command-line interface for quota management."""
 
+import os
 import sys
 from pathlib import Path
 from typing import List, Optional
 
 import click
 
-from quotactl.config import RancherInstanceConfig
+from quotactl.config import (
+    default_config_path,
+    RancherInstanceConfig,
+    write_default_config,
+)
 from quotactl.diff import format_plan_summary
 from quotactl.executor import Executor
 from quotactl.logging import setup_logging
@@ -16,18 +21,29 @@ from quotactl.report import generate_quota_report
 
 
 @click.group()
+@click.version_option(package_name="rancher-quota")
 def cli() -> None:
-    """Rancher Quota Automation Tool."""
+    """Rancher Quota Automation Tool.
+
+    Config is read from --config or QUOTACTL_CONFIG env or ~/.quotactl/config.
+    Credentials can come from config (url, token_ref) or env (RANCHER_URL, RANCHER_TOKEN).
+    Use 'quotactl init' to create a config interactively.
+    """
     pass
+
+
+def _get_config_path(config: Optional[Path]) -> Path:
+    """Resolve config path: explicit, or default."""
+    return config if config is not None else default_config_path()
 
 
 @cli.command("apply")
 @click.option(
     "--config",
     "-c",
-    required=True,
-    type=click.Path(exists=True, path_type=Path),
-    help="Path to Rancher instance configuration file",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Config file path (default: QUOTACTL_CONFIG or ~/.quotactl/config)",
 )
 @click.option(
     "--cluster",
@@ -67,12 +83,17 @@ def cli() -> None:
 )
 @click.option(
     "--token-env-var",
-    help="Environment variable name containing Rancher API token",
+    help="Env var for Rancher token (overrides config token_ref)",
+)
+@click.option(
+    "--insecure",
+    is_flag=True,
+    help="Skip TLS certificate verification (e.g. for self-signed Rancher)",
 )
 @click.pass_context
 def apply_cmd(
     ctx: click.Context,
-    config: Path,
+    config: Optional[Path],
     cluster: tuple,
     project: tuple,
     all_projects: bool,
@@ -81,6 +102,7 @@ def apply_cmd(
     continue_on_error: bool,
     log_level: str,
     token_env_var: Optional[str],
+    insecure: bool,
 ) -> None:
     """Enforce project and namespace quotas (dry-run or apply)."""
     # Setup logging
@@ -95,9 +117,15 @@ def apply_cmd(
         click.echo("Error: --dry-run and --apply cannot be used together", err=True)
         sys.exit(1)
 
+    config_path = _get_config_path(config)
+    if not config_path.exists():
+        click.echo(f"Error: Config file not found: {config_path}", err=True)
+        click.echo("Run 'quotactl init' to create one, or set QUOTACTL_CONFIG / --config.", err=True)
+        sys.exit(1)
+
     # Load configuration
     try:
-        instance_config = RancherInstanceConfig.from_file(config, token_env_var)
+        instance_config = RancherInstanceConfig.from_file(config_path, token_env_var)
         logger.set_context(instance=instance_config.url)
     except Exception as e:
         click.echo(f"Error loading configuration: {e}", err=True)
@@ -108,8 +136,11 @@ def apply_cmd(
     project_names: Optional[List[str]] = list(project) if project else None
 
     # Initialize Rancher client
+    verify_ssl = False if insecure else instance_config.verify_ssl
     try:
-        client = RancherClient(instance_config.url, instance_config.token, logger)
+        client = RancherClient(
+            instance_config.url, instance_config.token, logger, verify=verify_ssl
+        )
     except Exception as e:
         click.echo(f"Error initializing Rancher client: {e}", err=True)
         sys.exit(1)
@@ -169,9 +200,9 @@ def apply_cmd(
 @click.option(
     "--config",
     "-c",
-    required=True,
-    type=click.Path(exists=True, path_type=Path),
-    help="Path to Rancher instance configuration file",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Config file path (default: QUOTACTL_CONFIG or ~/.quotactl/config)",
 )
 @click.option(
     "--output",
@@ -193,27 +224,40 @@ def apply_cmd(
 )
 @click.option(
     "--token-env-var",
-    help="Environment variable name containing Rancher API token",
+    help="Environment variable name for Rancher API token (overrides config token_ref)",
+)
+@click.option(
+    "--insecure",
+    is_flag=True,
+    help="Skip TLS certificate verification (e.g. for self-signed Rancher)",
 )
 def report_cmd(
-    config: Path,
+    config: Optional[Path],
     output: Path,
     cluster: tuple,
     log_level: str,
     token_env_var: Optional[str],
+    insecure: bool,
 ) -> None:
     """Generate HTML report of all project and namespace quotas."""
     logger = setup_logging(log_level)
 
+    config_path = _get_config_path(config)
+    if not config_path.exists():
+        click.echo(f"Error: Config file not found: {config_path}", err=True)
+        click.echo("Run 'quotactl init' to create one, or set QUOTACTL_CONFIG / --config.", err=True)
+        sys.exit(1)
+
     try:
-        instance_config = RancherInstanceConfig.from_file(config, token_env_var)
+        instance_config = RancherInstanceConfig.from_file(config_path, token_env_var)
     except Exception as e:
         click.echo(f"Error loading configuration: {e}", err=True)
         sys.exit(1)
 
+    verify_ssl = False if insecure else instance_config.verify_ssl
     try:
         client = RancherClient(
-            instance_config.url, instance_config.token, logger
+            instance_config.url, instance_config.token, logger, verify=verify_ssl
         )
     except Exception as e:
         click.echo(f"Error initializing Rancher client: {e}", err=True)
@@ -232,6 +276,50 @@ def report_cmd(
         sys.exit(1)
 
     click.echo(f"Report written to {output}")
+
+
+@cli.command("init")
+@click.option(
+    "--config",
+    "-c",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Config file to create (default: ~/.quotactl/config)",
+)
+def init_cmd(config: Optional[Path]) -> None:
+    """Create config file interactively (prompts for Rancher URL and token)."""
+    path = _get_config_path(config)
+
+    if path.exists():
+        if not click.confirm(f"{path} already exists. Overwrite?"):
+            return
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    url = click.prompt("Rancher URL", type=str)
+    if not url:
+        click.echo("Error: URL is required", err=True)
+        sys.exit(1)
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    click.echo(
+        "Token: enter the token value, or an env var name (e.g. RANCHER_TOKEN) to read from env"
+    )
+    token_input = click.prompt("Token or token env var", type=str, default="RANCHER_TOKEN")
+    if not token_input:
+        click.echo("Error: Token or token env var is required", err=True)
+        sys.exit(1)
+
+    # If it looks like a literal token (contains : or starts with token-), store as token
+    if ":" in token_input or token_input.strip().startswith("token-"):
+        write_default_config(path, url=url, token_ref="RANCHER_TOKEN", token_literal=token_input)
+    else:
+        # Treat as env var name
+        if os.getenv(token_input):
+            click.echo(f"Using value from {token_input}")
+        write_default_config(path, url=url, token_ref=token_input)
+
+    click.echo(f"Config written to {path}")
 
 
 def main() -> None:

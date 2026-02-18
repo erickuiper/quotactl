@@ -23,6 +23,16 @@ A Python automation tool for auditing and enforcing Rancher quotas (Rancher 2.13
 
 ## Installation
 
+### Quick local setup
+
+From the repo root:
+
+```bash
+make install    # editable install; use quotactl from source
+make build      # single Linux binary → dist/quotactl (requires PyInstaller)
+make test       # run tests
+```
+
 ### Standard Installation
 
 ```bash
@@ -56,7 +66,8 @@ chmod +x quotactl
 To build the binary yourself (requires PyInstaller):
 
 ```bash
-./scripts/build-release.sh
+make build
+# or: ./scripts/build-release.sh
 # Output: dist/quotactl
 ```
 
@@ -67,6 +78,7 @@ Create a YAML configuration file for each Rancher instance:
 ```yaml
 url: https://rancher.example.com
 token_ref: RANCHER_TOKEN  # Environment variable name
+# insecure_skip_tls_verify: true   # Set if Rancher uses self-signed cert (or use --insecure / RANCHER_INSECURE_SKIP_VERIFY=1)
 
 clusters:
   production:
@@ -92,6 +104,7 @@ clusters:
 - `url`: Rancher instance base URL
 - `token`: API token (not recommended - use `token_ref` instead)
 - `token_ref`: Environment variable name containing the API token
+- `insecure_skip_tls_verify`: Set to `true` to skip TLS verification (e.g. self-signed Rancher). Alternatively use CLI `--insecure` or env `RANCHER_INSECURE_SKIP_VERIFY=1`.
 - `clusters`: Dictionary of cluster configurations
   - `cluster_id`: Rancher cluster ID
   - `projects`: Dictionary of project configurations

@@ -6,6 +6,7 @@ import time
 from typing import Dict, List, Optional
 
 import requests
+import urllib3
 
 from quotactl.kubernetes_client import KubernetesClient
 from quotactl.logging import ContextLogger
@@ -39,6 +40,8 @@ class RancherClient:
                 "yes",
             )
         self.verify = verify
+        if not self.verify:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -152,7 +155,9 @@ class RancherClient:
         if not cluster_id:
             return []
         kubeconfig = self.generate_kubeconfig(cluster_id)
-        k8s_client = KubernetesClient.from_kubeconfig(kubeconfig, self.logger)
+        k8s_client = KubernetesClient.from_kubeconfig(
+            kubeconfig, self.logger, verify_override=self.verify
+        )
         return k8s_client.list_namespaces_in_project(project_id)
 
     def get_namespace(self, namespace_id: str) -> Namespace:
@@ -162,7 +167,9 @@ class RancherClient:
         if not cluster_id or not ns_name:
             raise RancherAPIError(f"Invalid namespace ID format: {namespace_id}")
         kubeconfig = self.generate_kubeconfig(cluster_id)
-        k8s_client = KubernetesClient.from_kubeconfig(kubeconfig, self.logger)
+        k8s_client = KubernetesClient.from_kubeconfig(
+            kubeconfig, self.logger, verify_override=self.verify
+        )
         item = k8s_client.get_namespace(ns_name)
         if not item:
             raise RancherAPIError(f"Namespace not found: {namespace_id}")
@@ -178,7 +185,9 @@ class RancherClient:
         if not cluster_id or not ns_name:
             raise RancherAPIError(f"Invalid namespace ID format: {namespace_id}")
         kubeconfig = self.generate_kubeconfig(cluster_id)
-        k8s_client = KubernetesClient.from_kubeconfig(kubeconfig, self.logger)
+        k8s_client = KubernetesClient.from_kubeconfig(
+            kubeconfig, self.logger, verify_override=self.verify
+        )
         resource_quota = quota_data.get("resourceQuota", {})
         patch = {
             "metadata": {

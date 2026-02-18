@@ -7,10 +7,10 @@ set -e
 cd "$(dirname "$0")/.."
 
 echo "Installing dependencies and PyInstaller..."
-pip install -e . pyinstaller -q
+python -m pip install -e . pyinstaller -q
 
 echo "Building single binary (linux amd64)..."
-pyinstaller \
+python -m PyInstaller \
   --onefile \
   --name quotactl \
   --clean \

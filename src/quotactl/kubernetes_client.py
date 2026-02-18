@@ -8,6 +8,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 import requests
+import urllib3
 import yaml
 
 from quotactl.logging import ContextLogger
@@ -96,6 +97,8 @@ class KubernetesClient:
                 "yes",
             )
         self.verify = verify
+        if not self.verify:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -213,9 +216,16 @@ class KubernetesClient:
         cls,
         kubeconfig_str: str,
         logger: ContextLogger,
+        verify_override: Optional[bool] = None,
     ) -> "KubernetesClient":
-        """Create client from kubeconfig YAML (e.g., from Rancher generateKubeconfig)."""
+        """Create client from kubeconfig YAML (e.g., from Rancher generateKubeconfig).
+
+        If verify_override is not None (e.g. from RancherClient.verify), it takes
+        precedence over kubeconfig and env so --insecure applies to K8s API calls too.
+        """
         server, token, verify = _parse_kubeconfig(kubeconfig_str)
-        if os.getenv("RANCHER_INSECURE_SKIP_VERIFY", "").lower() in ("1", "true", "yes"):
+        if verify_override is not None:
+            verify = verify_override
+        elif os.getenv("RANCHER_INSECURE_SKIP_VERIFY", "").lower() in ("1", "true", "yes"):
             verify = False
         return cls(base_url=server, token=token, logger=logger, verify=verify)

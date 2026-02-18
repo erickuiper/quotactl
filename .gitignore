@@ -52,6 +52,7 @@ Thumbs.db
 *.log
 wheels/
 quota-report.html
+report.html
 *.yaml.bak
 *.yml.bak
 

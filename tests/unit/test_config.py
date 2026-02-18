@@ -142,8 +142,14 @@ class TestRancherInstanceConfig:
             config_path = Path(f.name)
 
         try:
-            with pytest.raises(ValueError, match="url"):
-                RancherInstanceConfig.from_file(config_path)
+            # Unset RANCHER_URL so config file is the only source
+            orig = os.environ.pop("RANCHER_URL", None)
+            try:
+                with pytest.raises(ValueError, match="url"):
+                    RancherInstanceConfig.from_file(config_path)
+            finally:
+                if orig is not None:
+                    os.environ["RANCHER_URL"] = orig
         finally:
             config_path.unlink()
 
@@ -166,4 +172,41 @@ class TestRancherInstanceConfig:
         config_path = Path("/nonexistent/config.yaml")
         with pytest.raises(FileNotFoundError):
             RancherInstanceConfig.from_file(config_path)
+
+    def test_load_config_insecure_skip_tls_verify(self):
+        """Test loading config with insecure_skip_tls_verify disables SSL verification."""
+        config_data = {
+            "url": "https://rancher.example.com",
+            "token": "test-token",
+            "insecure_skip_tls_verify": True,
+            "clusters": {},
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(config_data, f)
+            config_path = Path(f.name)
+
+        try:
+            config = RancherInstanceConfig.from_file(config_path)
+            assert config.verify_ssl is False
+        finally:
+            config_path.unlink()
+
+    def test_load_config_default_verify_ssl_true(self):
+        """Test verify_ssl is True when insecure_skip_tls_verify is absent."""
+        config_data = {
+            "url": "https://rancher.example.com",
+            "token": "test-token",
+            "clusters": {},
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(config_data, f)
+            config_path = Path(f.name)
+
+        try:
+            config = RancherInstanceConfig.from_file(config_path)
+            assert config.verify_ssl is True
+        finally:
+            config_path.unlink()
 

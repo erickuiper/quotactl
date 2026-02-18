@@ -12,6 +12,9 @@ token_ref: RANCHER_TOKEN
 # Option 2: Direct token (NOT RECOMMENDED for production)
 # token: your-token-here
 
+# Skip TLS verification (e.g. self-signed or internal CA)
+# insecure_skip_tls_verify: true
+
 # Cluster configurations
 clusters:
   # Production cluster
