@@ -13,8 +13,8 @@ permissions:
 
 jobs:
   release:
-    # Build on older runner so the binary links against older glibc and runs on more Linux hosts.
-    runs-on: ubuntu-20.04
+    # ubuntu-20.04 runners were retired; use 22.04 (free GitHub-hosted runner).
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
