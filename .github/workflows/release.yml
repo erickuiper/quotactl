@@ -1,4 +1,4 @@
-# Create a GitHub Release with a single Linux amd64 binary when a version tag is pushed.
+# Create a GitHub Release with Linux amd64 binary and Python package (wheel + sdist) when a version tag is pushed.
 # Usage: git tag v0.1.0 && git push origin v0.1.0
 
 name: Release
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 jobs:
-  build-linux-amd64:
+  release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,10 +23,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies and PyInstaller
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e . pyinstaller
+          pip install -e . build pyinstaller
+
+      - name: Build Python package (wheel + sdist)
+        run: python -m build
 
       - name: Build binary
         run: |
@@ -45,7 +48,10 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/quotactl-*-linux-amd64
+          files: |
+            dist/quotactl-*-linux-amd64
+            dist/*.whl
+            dist/*.tar.gz
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
