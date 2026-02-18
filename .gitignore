@@ -49,6 +49,7 @@ Thumbs.db
 
 # Project specific
 .env
+rancher-config.yaml
 *.log
 wheels/
 quota-report.html
