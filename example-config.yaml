@@ -1,0 +1,52 @@
+# Example Rancher Quota Configuration
+# 
+# This is an example configuration file for the Rancher Quota Automation Tool.
+# Copy this file and customize it for your Rancher instance.
+
+url: https://rancher.example.com
+
+# Token configuration (choose one):
+# Option 1: Reference environment variable (RECOMMENDED)
+token_ref: RANCHER_TOKEN
+
+# Option 2: Direct token (NOT RECOMMENDED for production)
+# token: your-token-here
+
+# Cluster configurations
+clusters:
+  # Production cluster
+  production:
+    cluster_id: c-abc123
+    projects:
+      # Example project with project and namespace quotas
+      my-app:
+        project_quota:
+          cpu_limit: "2000m"
+          memory_limit: "4Gi"
+          cpu_reservation: "1000m"
+          memory_reservation: "2Gi"
+        namespace_quotas:
+          default:
+            cpu_limit: "1000m"
+            memory_limit: "2Gi"
+            cpu_reservation: "500m"
+            memory_reservation: "1Gi"
+          staging:
+            cpu_limit: "500m"
+            memory_limit: "1Gi"
+
+      # Another project with only project quota
+      another-project:
+        project_quota:
+          cpu_limit: "4000m"
+          memory_limit: "8Gi"
+
+  # Staging cluster
+  staging:
+    cluster_id: c-def456
+    projects:
+      test-project:
+        project_quota:
+          cpu_limit: "1000m"
+          memory_limit: "2Gi"
+

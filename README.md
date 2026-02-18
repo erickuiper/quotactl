@@ -1,0 +1,360 @@
+# Rancher Quota Automation Tool
+
+A Python automation tool for auditing and enforcing Rancher quotas (Rancher 2.13) for project-level and namespace-level quotas in air-gapped on-prem environments.
+
+## Features
+
+- **Project-level quota enforcement**: CPU and memory limits/reservations
+- **Namespace-level quota enforcement**: CPU and memory limits/reservations
+- **Multi-cluster support**: Manage quotas across multiple Kubernetes clusters
+- **Multi-instance support**: Support for multiple Rancher instances
+- **Idempotent operations**: Only updates quotas when drift is detected
+- **Dry-run mode**: Preview changes without applying them
+- **Structured logging**: JSON-formatted logs with context
+- **Air-gapped ready**: All dependencies pinned for offline installation
+- **HTML quota report**: Overview of all project and namespace quotas
+
+## Requirements
+
+- Python 3.9 or higher
+- Rancher 2.13
+- Kubernetes 1.33 (downstream clusters)
+- Rancher API token with appropriate permissions
+
+## Installation
+
+### Standard Installation
+
+```bash
+pip install -e .
+```
+
+### Air-Gapped Installation
+
+For air-gapped environments, install from local wheel cache:
+
+```bash
+# Download dependencies (on internet-connected machine)
+pip download -r requirements.txt -d wheels/
+
+# Transfer wheels/ directory to air-gapped machine
+
+# Install from local cache
+pip install --no-index --find-links wheels/ -r requirements.txt
+pip install -e .
+```
+
+## Configuration
+
+Create a YAML configuration file for each Rancher instance:
+
+```yaml
+url: https://rancher.example.com
+token_ref: RANCHER_TOKEN  # Environment variable name
+
+clusters:
+  production:
+    cluster_id: c-abc123
+    projects:
+      my-project:
+        project_quota:
+          cpu_limit: "2000m"
+          memory_limit: "4Gi"
+          cpu_reservation: "1000m"
+          memory_reservation: "2Gi"
+        namespace_quotas:
+          ns1:
+            cpu_limit: "1000m"
+            memory_limit: "2Gi"
+          ns2:
+            cpu_limit: "500m"
+            memory_limit: "1Gi"
+```
+
+### Configuration Options
+
+- `url`: Rancher instance base URL
+- `token`: API token (not recommended - use `token_ref` instead)
+- `token_ref`: Environment variable name containing the API token
+- `clusters`: Dictionary of cluster configurations
+  - `cluster_id`: Rancher cluster ID
+  - `projects`: Dictionary of project configurations
+    - `project_quota`: Project-level quota specification
+    - `namespace_quotas`: Dictionary of namespace quotas (keyed by namespace name)
+
+### Quota Format
+
+- **CPU values**: Use millicores (e.g., `"2000m"`) or cores (e.g., `"2"`)
+- **Memory values**: Use Kubernetes memory format (e.g., `"4Gi"`, `"2G"`, `"512Mi"`)
+
+### Security
+
+**Recommended**: Use environment variables for tokens:
+
+```bash
+export RANCHER_TOKEN="your-token-here"
+```
+
+The tool will never log token values (they are masked in logs).
+
+## Usage
+
+The tool has two main commands: `apply` (enforce quotas) and `report` (generate HTML overview).
+
+### Apply Command: Dry Run (Preview Changes)
+
+```bash
+quotactl apply --config instance.yaml --cluster c-abc123 --project my-project --dry-run
+```
+
+### Apply Command: Apply Changes
+
+```bash
+quotactl apply --config instance.yaml --cluster c-abc123 --project my-project --apply
+```
+
+### Apply Command: Multiple Projects
+
+```bash
+quotactl apply --config instance.yaml --cluster c-abc123 --project p1 --project p2 --apply
+```
+
+### Apply Command: All Projects in Cluster
+
+```bash
+quotactl apply --config instance.yaml --cluster c-abc123 --all-projects --apply
+```
+
+### Apply Command: Multiple Clusters
+
+```bash
+quotactl apply --config instance.yaml --cluster c-abc123 --cluster c-def456 --all-projects --apply
+```
+
+### Apply Command: Continue on Error
+
+```bash
+quotactl apply --config instance.yaml --cluster c-abc123 --all-projects --apply --continue-on-error
+```
+
+### Report Command: Generate HTML Quota Overview
+
+Generate a readable HTML report of all project and namespace quotas across clusters:
+
+```bash
+quotactl report --config instance.yaml --output quota-report.html
+```
+
+To limit to specific clusters:
+
+```bash
+quotactl report --config instance.yaml --output quota-report.html --cluster local --cluster c-abc123
+```
+
+The report is self-contained HTML with embedded CSS, suitable for sharing or viewing in a browser.
+
+### Command-Line Options
+
+**Apply command:**
+- `--config`, `-c`: Path to configuration file (required)
+- `--cluster`: Cluster ID(s) to process (can be specified multiple times)
+- `--project`: Project name(s) to process (can be specified multiple times)
+- `--all-projects`: Process all projects in selected clusters
+- `--dry-run`: Show planned changes without applying
+- `--apply`: Apply quota changes (required for write operations)
+- `--continue-on-error`: Continue processing after errors (default: fail-fast)
+- `--log-level`: Logging level (DEBUG, INFO, WARNING, ERROR)
+- `--token-env-var`: Environment variable name containing Rancher API token
+
+**Report command:**
+- `--config`, `-c`: Path to configuration file (required)
+- `--output`, `-o`: Output HTML file path (required)
+- `--cluster`: Cluster ID(s) to include (default: all clusters)
+- `--log-level`: Logging level (DEBUG, INFO, WARNING, ERROR)
+- `--token-env-var`: Environment variable name containing Rancher API token
+
+## Exit Codes
+
+- `0`: Success
+- `1`: Fatal error
+- `2`: Partial failure (when using `--continue-on-error`)
+
+## Rancher API Permissions
+
+The tool requires the following Rancher API permissions:
+
+- **Read**: `projects.get`, `namespaces.get`, `clusters.get`
+- **Write**: `projects.update`, `namespaces.update`
+
+Recommended Rancher roles:
+- **Project Owner** (for project-level quotas)
+- **Cluster Admin** (for cluster-wide operations)
+
+## Examples
+
+### Example 1: Preview Changes for Single Project
+
+```bash
+quotactl apply --config rancher-prod.yaml \
+  --cluster c-abc123 \
+  --project my-app \
+  --dry-run
+```
+
+Output:
+```
+Execution Plan: 2 change(s) needed out of 2 resource(s)
+  project 'my-app':
+    CPU Limit: 2000m → 3000m
+    Memory Limit: 4Gi → 8Gi
+  namespace 'my-app-ns':
+    CPU Limit: 1000m → 2000m
+
+[DRY RUN] No changes applied.
+```
+
+### Example 2: Apply Quota Changes
+
+```bash
+quotactl apply --config rancher-prod.yaml \
+  --cluster c-abc123 \
+  --project my-app \
+  --apply
+```
+
+### Example 3: Process All Projects in Cluster
+
+```bash
+quotactl apply --config rancher-prod.yaml \
+  --cluster c-abc123 \
+  --all-projects \
+  --apply \
+  --continue-on-error
+```
+
+### Example 4: Generate HTML Quota Report
+
+```bash
+quotactl report --config rancher-prod.yaml --output quota-overview.html
+```
+
+## Testing
+
+### Unit Tests
+
+```bash
+pytest tests/unit/
+```
+
+### Integration Tests
+
+Integration tests require a real Rancher instance. Set environment variables:
+
+```bash
+export RANCHER_URL="https://rancher.example.com"
+export RANCHER_TOKEN="your-token"
+export CLUSTER_ID="c-abc123"
+export PROJECT_NAME_TEST="test-project"
+export INTEGRATION_WRITE=1  # Required for write operations
+```
+
+Run integration tests:
+
+```bash
+pytest tests/integration/ -m integration
+```
+
+**Note**: Integration tests will:
+1. Read current quota state
+2. Apply safe test changes
+3. Verify results
+4. Restore original values
+
+## Logging
+
+The tool uses structured JSON logging. Logs are written to stderr and include:
+
+- Timestamp
+- Log level
+- Message
+- Context: instance, cluster, project, namespace
+
+Example log entry:
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00Z",
+  "level": "INFO",
+  "message": "Processing project: my-app",
+  "instance": "https://rancher.example.com",
+  "cluster": "c-abc123",
+  "project": "my-app"
+}
+```
+
+## Project Structure
+
+```
+rancher-quota/
+├── src/
+│   └── quotactl/
+│       ├── __init__.py
+│       ├── cli.py           # Command-line interface
+│       ├── config.py        # Configuration loading
+│       ├── diff.py          # Diff generation
+│       ├── executor.py      # Quota enforcement
+│       ├── logging.py       # Structured logging
+│       ├── models.py        # Data models
+│       ├── planner.py       # Execution planning
+│       └── rancher_client.py # Rancher API client
+├── tests/
+│   ├── unit/               # Unit tests
+│   └── integration/        # Integration tests
+├── DESIGN.md              # Design document
+├── pyproject.toml         # Project metadata
+├── requirements.txt      # Pinned dependencies
+└── README.md             # This file
+```
+
+## Design Document
+
+See [DESIGN.md](DESIGN.md) for detailed architecture, data models, API usage, failure modes, and testing strategy.
+
+## Limitations
+
+1. **No Rollback**: The tool does not implement rollback functionality. Each quota update is independent.
+2. **No Locking**: Concurrent modifications are not prevented (last write wins).
+3. **Project Name Collisions**: Project names must be unique within a cluster.
+4. **API Rate Limits**: The tool includes retry logic but does not implement rate limiting.
+
+## Troubleshooting
+
+### Authentication Errors
+
+- Verify token is valid and has required permissions
+- Check token is set in environment variable (if using `token_ref`)
+- Ensure token has not expired
+
+### Project Not Found
+
+- Verify project name matches exactly (case-sensitive)
+- Ensure project exists in the specified cluster
+- Check cluster ID is correct
+
+### Quota Update Failures
+
+- Verify API token has write permissions
+- Check quota values are in correct format
+- Review Rancher API logs for detailed error messages
+
+## Contributing
+
+1. Follow the design document for architecture decisions
+2. Maintain test coverage above 90%
+3. Use structured logging for all operations
+4. Document all assumptions and limitations
+
+## License
+
+MIT License
+

@@ -1,0 +1,10 @@
+# Pinned dependencies for air-gapped environments
+requests==2.31.0
+pyyaml==6.0.1
+click==8.1.7
+
+# Development dependencies (optional)
+# pytest==7.4.0
+# pytest-cov==4.1.0
+# pytest-mock==3.11.1
+
